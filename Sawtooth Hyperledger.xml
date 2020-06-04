@@ -1,0 +1,345 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
+<nta>
+	<declaration>// Place global declarations here.
+
+
+const int N=2;
+typedef struct {
+int time;
+int value;
+} block;
+
+
+typedef int[0,N-1] id_t;
+
+chan client, response, validator[N];
+broadcast chan poet;
+
+
+block global_buffer[20];
+block global_ledger_table[N][20];
+int global_table_row;
+
+bool global_reply_server = false;
+bool global_reply_validator= false;</declaration>
+	<template>
+		<name x="5" y="5">Client</name>
+		<parameter>int x</parameter>
+		<declaration>// Place local declarations here.
+
+block buffer[20];
+int j=0;
+int t=0;
+bool generated= false;
+bool reply;
+int elements;
+
+
+int valueIndex()
+{
+    reply=false;
+    return x+2+elements;
+}
+
+int timeStamp()
+{    
+    t++;
+    return t;
+}
+
+
+void genesis()
+{
+    buffer[j].time=timeStamp();
+    buffer[j].value=valueIndex(); //inserisco un valore random
+    j++;
+    elements++;
+
+    if(j==10) // se l'indice arriva a 10 , riazzero l'indice
+    {
+       j=0;
+    }
+
+    generated= true; //confermo la generazione del blocco o dei blocchi
+
+}
+
+
+void sendToServer()
+{
+    global_buffer=buffer;
+}
+
+
+void replyServer()
+{
+    reply= global_reply_server;
+
+    while(j!=0)
+    {
+        j--;
+        buffer[j].value=0;
+        buffer[j].time=0;
+        
+    }
+
+}
+
+</declaration>
+		<location id="id0" x="161" y="0">
+			<name x="144" y="-34">Block_sent</name>
+		</location>
+		<location id="id1" x="-119" y="0">
+			<name x="-119" y="-34">Ready</name>
+		</location>
+		<init ref="id1"/>
+		<transition>
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="synchronisation" x="0" y="68">response?</label>
+			<label kind="assignment" x="-8" y="85">replyServer()</label>
+			<nail x="76" y="119"/>
+			<nail x="-26" y="119"/>
+		</transition>
+		<transition>
+			<source ref="id1"/>
+			<target ref="id0"/>
+			<label kind="guard" x="17" y="-59">j&gt;0</label>
+			<label kind="synchronisation" x="8" y="-76">client!</label>
+			<label kind="assignment" x="-25" y="-42">sendToServer()</label>
+		</transition>
+		<transition>
+			<source ref="id1"/>
+			<target ref="id1"/>
+			<label kind="assignment" x="-263" y="-127">genesis()</label>
+			<nail x="-306" y="-102"/>
+			<nail x="-170" y="-102"/>
+		</transition>
+	</template>
+	<template>
+		<name>Tr_Processor</name>
+		<parameter>const id_t id</parameter>
+		<declaration>
+block ledger[20];
+int i=0;
+int j=0;
+int elements=0;
+block local_buffer[20];
+
+void countBlocks()
+{
+    for(i=0;local_buffer[i].value!=0;i++)
+    {
+        elements++;
+    }
+    
+}
+
+void clientRequest()
+{
+    
+    local_buffer= global_buffer ;
+}
+
+
+void sendBlockToValidator()
+{
+    global_ledger_table[id]= local_buffer;
+    global_reply_server=false;
+
+}
+
+void serverResponse()
+{
+    global_reply_server= global_reply_validator;
+}
+
+void setBlockStore() //HO PERSO :(
+{
+    local_buffer= global_ledger_table[global_table_row];
+    countBlocks();
+    i=0;
+
+    while(local_buffer[i].value!=0)
+    {
+        ledger[j]=local_buffer[i];
+        j++;
+        i++;
+
+        if(j==20)
+        {
+        j=0;
+        }
+        
+    }
+    
+
+    while(i!=0)
+    {
+        i--;
+        local_buffer[i].value=0;
+        local_buffer[i].time=0;
+        
+    }
+
+}
+
+void setGlobalLedgers()
+{
+    int k=0;
+    while(k&lt;N)
+    {
+       global_ledger_table[k]=ledger;
+       k++;
+        
+    }
+}
+
+
+
+</declaration>
+		<location id="id2" x="161" y="127">
+			<name x="178" y="110">Processed_Request</name>
+			<committed/>
+		</location>
+		<location id="id3" x="-144" y="127">
+			<name x="-272" y="119">Ready_Response</name>
+			<committed/>
+		</location>
+		<location id="id4" x="-144" y="-76">
+			<name x="-170" y="-110">Listen</name>
+		</location>
+		<branchpoint id="id5" x="161" y="-76">
+		</branchpoint>
+		<init ref="id4"/>
+		<transition>
+			<source ref="id4"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="-296" y="-140">poet?</label>
+			<label kind="assignment" x="-323" y="-119">setBlockStore()</label>
+			<nail x="-314" y="-170"/>
+			<nail x="-34" y="-170"/>
+		</transition>
+		<transition>
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="-25" y="127">validator[id]!</label>
+			<label kind="assignment" x="-68" y="144">sendBlockToValidator()</label>
+		</transition>
+		<transition>
+			<source ref="id5"/>
+			<target ref="id2"/>
+			<label kind="probability" x="170" y="17">90</label>
+		</transition>
+		<transition>
+			<source ref="id5"/>
+			<target ref="id3"/>
+			<label kind="assignment" x="-93" y="-34">global_reply_server= false</label>
+			<label kind="probability" x="0" y="-8">10</label>
+		</transition>
+		<transition>
+			<source ref="id4"/>
+			<target ref="id5"/>
+			<label kind="synchronisation" x="25" y="-119">client?</label>
+			<label kind="assignment" x="-8" y="-102">clientRequest()</label>
+			<nail x="153" y="-76"/>
+		</transition>
+		<transition>
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="-238" y="0">response!</label>
+			<label kind="assignment" x="-263" y="17">serverResponse()</label>
+		</transition>
+	</template>
+	<template>
+		<name>Validator</name>
+		<parameter>const id_t id</parameter>
+		<declaration>
+bool generated= false;
+int j=0;
+
+
+
+void writeGlobal() //HO VINTO! :)
+{
+    //global_ledger_table[0]=ledger;
+    global_table_row= id;
+    generated= false;
+    global_reply_validator= true;
+}
+
+</declaration>
+		<location id="id6" x="77" y="-8">
+			<name x="102" y="-25">SGX</name>
+		</location>
+		<location id="id7" x="-297" y="-8">
+			<name x="-357" y="-17">Ready</name>
+		</location>
+		<init ref="id7"/>
+		<transition>
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="assignment" x="-195" y="-34">global_reply_validator=false</label>
+		</transition>
+		<transition>
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="synchronisation" x="-110" y="76">poet!</label>
+			<label kind="assignment" x="-136" y="93">writeGlobal()</label>
+			<nail x="17" y="76"/>
+			<nail x="-220" y="76"/>
+		</transition>
+		<transition>
+			<source ref="id7"/>
+			<target ref="id6"/>
+			<label kind="synchronisation" x="-144" y="-110">validator[id]?</label>
+			<nail x="-229" y="-76"/>
+			<nail x="26" y="-76"/>
+		</transition>
+	</template>
+	<system>// Place template instantiations here.
+ClientA = Client(14);
+ClientB = Client(71);
+//ClientC = Client(89);
+//ClientD = Client(20);
+//ClientE = Client(33);
+//ClientF = Client(51);
+
+// List one or more processes to be composed into a system.
+system ClientA,ClientB,Tr_Processor,Validator;
+   
+</system>
+	<queries>
+		<query>
+			<formula>E[] forall (i:id_t) forall (j:id_t)(Tr_Processor(i).ledger == Tr_Processor(j).ledger)
+			</formula>
+			<comment>REPLICATION: verifichiamo che tra tutte le istanze del template Transaction Processor i ledger siano uguali
+			</comment>
+		</query>
+		<query>
+			<formula>E[] (Tr_Processor(0).ledger[2].time &lt;= Tr_Processor(1).ledger[3].time)
+			</formula>
+			<comment>IRREVERSIBILITY E TIMESTAMPING: verifichiamo che il blocco predcedente ad un altro, all'interno di un ledger, abbia un timestamp minore del blocco successivo.
+			</comment>
+		</query>
+		<query>
+			<formula>E[] (Tr_Processor(0).ledger[2].time &gt; Tr_Processor(1).ledger[3].time)
+			</formula>
+			<comment>Controprovare per dimostrare che non può accadere che un blocco precedente al successivo abbia un timestamp maggiore.
+			</comment>
+		</query>
+		<query>
+			<formula>E[] forall (i:id_t) forall(j:int[0,19]) forall(k:int[0,19]) (Tr_Processor(i).ledger[j].time &lt;= Tr_Processor(i).ledger[k].time)
+			</formula>
+			<comment>Verifichiamo che la proprietà di timestamping valga per tutt gli elementi del ledger appartentente alla medesima istanza di Transaction Processor.
+			</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt;  ((Tr_Processor(0).ledger == Tr_Processor(1).ledger) and (Tr_Processor(0).elements&gt;9))
+			</formula>
+			<comment>Esiste almeno un path in cui vale che due Transaction processor abbiano ledger uguali e che i blocchi memorizzati siano superiori a 9 ?
+			</comment>
+		</query>
+	</queries>
+</nta>
